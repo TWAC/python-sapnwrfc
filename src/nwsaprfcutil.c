@@ -575,6 +575,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
   RFC_PARAMETER_DESC parm_desc;
   unsigned parm_count, i;
   //int i;
+  PyObject *cleanup = NULL;
 
   if (! PyArg_Parse(args, "(O)", &func)) {
       Py_DECREF(args);
@@ -583,8 +584,11 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
 
   hptr = self->connInfo;
 
-  if (!PyBytes_Check(func)) {
-    PyErr_Format(PyExc_TypeError, "Function Name in function_lookup must be a String");
+  if (PyUnicode_Check(func)) {
+    func = cleanup = PyUnicode_AsUTF8String(func);
+    /* TODO Does old func need REF count change? */
+  } else if (!PyBytes_Check(func)) {
+    PyErr_Format(PyExc_TypeError, "Function Name in function_lookup must be a String or UTF-8 encoded Bytes");
     return NULL;
   }
 
@@ -653,6 +657,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
     PyDict_SetItem(parameters, parm_name, parameter);
   }
 
+  Py_XDECREF(cleanup);
   return (PyObject*)function_def;
 }
 
