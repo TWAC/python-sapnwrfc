@@ -16,13 +16,16 @@ typedef int Py_ssize_t;
 #   define PyInt_Check PyLong_Check
 #   define PyInt_FromLong PyLong_FromLong
 
-#   define PyString_AsString PyBytes_AsString
-#   define PyString_Check PyBytes_Check
-#   define PyString_FromFormat PyBytes_FromFormat
-#   define PyString_FromStringAndSize PyBytes_FromStringAndSize
-#   define PyString_FromString PyBytes_FromString
-#   define PyString_Size PyBytes_Size
+#endif
 
+/* included from bytesobject.h in Python 2.6+ */
+#if PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION < 6
+#   define PyBytes_AsString PyString_AsString
+#   define PyBytes_Check PyString_Check
+#   define PyBytes_FromFormat PyString_FromFormat
+#   define PyBytes_FromStringAndSize PyString_FromStringAndSize
+#   define PyBytes_FromString PyString_FromString
+#   define PyBytes_Size PyString_Size
 #endif
 
 /* SAP flag for Windows NT or 95 */
@@ -146,9 +149,9 @@ static void * make_space(int len){
 static void * make_strdup(PyObject *value){
 
     char * ptr;
-    int len = PyString_Size(value);
+    int len = PyBytes_Size(value);
     ptr = make_space(len);
-    memcpy((char *)ptr, PyString_AsString(value), len);
+    memcpy((char *)ptr, PyBytes_AsString(value), len);
     return ptr;
 }
 
@@ -188,14 +191,14 @@ SAP_UC * u8to16(PyObject *str) {
       str = cleanup = PyUnicode_AsUTF8String(str);
     }
 
-  sapucSize = PyString_Size(str) + 1;
+  sapucSize = PyBytes_Size(str) + 1;
   sapuc = mallocU(sapucSize);
   memsetU(sapuc, 0, sapucSize);
 
   resultLength = 0;
 
-  //rc = RfcUTF8ToSAPUC((RFC_BYTE *)PyString_AsString(str), PyString_Size(str), sapuc, &sapucSize, &resultLength, &errorInfo);
-  RfcUTF8ToSAPUC((RFC_BYTE *)PyString_AsString(str), PyString_Size(str), sapuc, &sapucSize, &resultLength, &errorInfo);
+  //rc = RfcUTF8ToSAPUC((RFC_BYTE *)PyBytes_AsString(str), PyBytes_Size(str), sapuc, &sapucSize, &resultLength, &errorInfo);
+  RfcUTF8ToSAPUC((RFC_BYTE *)PyBytes_AsString(str), PyBytes_Size(str), sapuc, &sapucSize, &resultLength, &errorInfo);
   Py_XDECREF(cleanup);
   return sapuc;
 }
@@ -216,7 +219,7 @@ PyObject* u16to8c(SAP_UC * str, int len) {
 
   //rc = RfcSAPUCToUTF8(str, len, (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
   RfcSAPUCToUTF8(str, len, (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
-  py_str = PyString_FromStringAndSize(utf8, resultLength);
+  py_str = PyBytes_FromStringAndSize(utf8, resultLength);
   free(utf8);
   return py_str;
 }
@@ -237,7 +240,7 @@ PyObject* u16to8(SAP_UC * str) {
 
   //rc = RfcSAPUCToUTF8(str, strlenU(str), (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
   RfcSAPUCToUTF8(str, strlenU(str), (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
-  py_str = PyString_FromStringAndSize(utf8, resultLength);
+  py_str = PyBytes_FromStringAndSize(utf8, resultLength);
   free(utf8);
   return py_str;
 }
@@ -245,7 +248,7 @@ PyObject* u16to8(SAP_UC * str) {
 
 static PyObject* SAPNW_rfc_conn_error(PyObject* msg, int code, PyObject* key, PyObject* message) {
 
-  PyErr_Format(E_RFC_COMMS, "RFC COMMUNICATION ERROR: %s / %d / %s / %s", PyString_AsString(msg), code, PyString_AsString(key), PyString_AsString(message));
+  PyErr_Format(E_RFC_COMMS, "RFC COMMUNICATION ERROR: %s / %d / %s / %s", PyBytes_AsString(msg), code, PyBytes_AsString(key), PyBytes_AsString(message));
   return NULL;
 }
 
@@ -253,7 +256,7 @@ static PyObject* SAPNW_rfc_conn_error(PyObject* msg, int code, PyObject* key, Py
 /*
 static PyObject* SAPNW_rfc_serv_error(PyObject* msg, int code, PyObject* key, PyObject* message) {
 
-  PyErr_Format(E_RFC_COMMS, "RFC SERVER ERROR: %s / %d / %s / %s", PyString_AsString(msg), code, PyString_AsString(key), PyString_AsString(message));
+  PyErr_Format(E_RFC_COMMS, "RFC SERVER ERROR: %s / %d / %s / %s", PyBytes_AsString(msg), code, PyBytes_AsString(key), PyBytes_AsString(message));
   return NULL;
 }
 */
@@ -261,7 +264,7 @@ static PyObject* SAPNW_rfc_serv_error(PyObject* msg, int code, PyObject* key, Py
 
 static PyObject* SAPNW_rfc_call_error(PyObject* msg, int code, PyObject* key, PyObject* message) {
 
-  PyErr_Format(E_RFC_COMMS, "RFC FUNCTION CALL ERROR: %s / %d / %s / %s", PyString_AsString(msg), code, PyString_AsString(key), PyString_AsString(message));
+  PyErr_Format(E_RFC_COMMS, "RFC FUNCTION CALL ERROR: %s / %d / %s / %s", PyBytes_AsString(msg), code, PyBytes_AsString(key), PyBytes_AsString(message));
   return NULL;
 }
 
@@ -282,7 +285,7 @@ static PyObject* conn_handle_close(SAPNW_CONN_INFO *ptr) {
   rc = RfcCloseConnection(ptr->handle, &errorInfo);
   if (rc != RFC_OK) {
     ptr->handle = NULL;
-    return SAPNW_rfc_conn_error(PyString_FromString("Problem closing RFC connection handle"),
+    return SAPNW_rfc_conn_error(PyBytes_FromString("Problem closing RFC connection handle"),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -320,7 +323,7 @@ static PyObject* sapnwrfc_connection_attributes(sapnwrfc_ConnObject *self, PyObj
 
   /* bail on a bad return code */
   if (rc != RFC_OK) {
-    return SAPNW_rfc_conn_error(PyString_FromString("getting connection attributes "),
+    return SAPNW_rfc_conn_error(PyBytes_FromString("getting connection attributes "),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -439,7 +442,7 @@ static int sapnwrfc_Conn_init(sapnwrfc_ConnObject *self, PyObject *args) {
       cleanup_hval = hval = PyUnicode_AsUTF8String(hval);
     }
 
-    if (strcmp(PyString_AsString(hval), "tpname") == 0)
+    if (strcmp(PyBytes_AsString(hval), "tpname") == 0)
       server = true;
     loginParams[i].name = (SAP_UC *) u8to16(parm);
     loginParams[i].value = (SAP_UC *) u8to16(hval);
@@ -468,7 +471,7 @@ static int sapnwrfc_Conn_init(sapnwrfc_ConnObject *self, PyObject *args) {
     free(loginParams);
   }
   if (hptr->handle == NULL) {
-    SAPNW_rfc_conn_error(PyString_FromString("RFC connection open failed "),
+    SAPNW_rfc_conn_error(PyBytes_FromString("RFC connection open failed "),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -580,7 +583,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
 
   hptr = self->connInfo;
 
-  if (!PyString_Check(func)) {
+  if (!PyBytes_Check(func)) {
     PyErr_Format(PyExc_TypeError, "Function Name in function_lookup must be a String");
     return NULL;
   }
@@ -590,7 +593,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
 
   /* bail on a bad lookup */
   if (func_desc_handle == NULL) {
-    return SAPNW_rfc_conn_error(PyString_FromFormat("Problem looking up RFC: %s", PyString_AsString(func)),
+    return SAPNW_rfc_conn_error(PyBytes_FromFormat("Problem looking up RFC: %s", PyBytes_AsString(func)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -608,7 +611,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
 
   /* bail on a bad RfcGetFunctionName */
   if (rc != RFC_OK) {
-    return SAPNW_rfc_conn_error(PyString_FromFormat("Problem in RfcGetFunctionName: %s", PyString_AsString(func)),
+    return SAPNW_rfc_conn_error(PyBytes_FromFormat("Problem in RfcGetFunctionName: %s", PyBytes_AsString(func)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -620,7 +623,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
 
   /* bail on a bad RfcGetParameterCount */
   if (rc != RFC_OK) {
-    return SAPNW_rfc_conn_error(PyString_FromFormat("Problem in RfcGetParameterCount: %s", PyString_AsString(func)),
+    return SAPNW_rfc_conn_error(PyBytes_FromFormat("Problem in RfcGetParameterCount: %s", PyBytes_AsString(func)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -632,7 +635,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
     rc = RfcGetParameterDescByIndex(dptr->handle, i, &parm_desc, &errorInfo);
     /* bail on a bad RfcGetParameterDescByIndex */
     if (rc != RFC_OK) {
-      return SAPNW_rfc_conn_error(PyString_FromFormat("Problem in RfcGetParameterDescByIndex: %s", PyString_AsString(func)),
+      return SAPNW_rfc_conn_error(PyBytes_FromFormat("Problem in RfcGetParameterDescByIndex: %s", PyBytes_AsString(func)),
                            errorInfo.code,
                            u16to8(errorInfo.key),
                            u16to8(errorInfo.message));
@@ -670,7 +673,7 @@ static PyObject * sapnwrfc_create_function_call(PyObject *self, PyObject *args){
 
   /* bail on a bad lookup */
   if (func_handle == NULL) {
-    return SAPNW_rfc_conn_error(PyString_FromFormat("Problem Creating Function Data Container RFC: %s", dptr->name),
+    return SAPNW_rfc_conn_error(PyBytes_FromFormat("Problem Creating Function Data Container RFC: %s", dptr->name),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -680,7 +683,7 @@ static PyObject * sapnwrfc_create_function_call(PyObject *self, PyObject *args){
   function = (sapnwrfc_FuncCallObject *) PyObject_CallFunction((PyObject *)&sapnwrfc_FuncCallType, "O", self);
   //Py_INCREF(function);
   function->handle->handle = func_handle;
-  PyObject_SetAttrString((PyObject*)function, "name", PyString_FromString(dptr->name));
+  PyObject_SetAttrString((PyObject*)function, "name", PyBytes_FromString(dptr->name));
   PyObject_SetAttrString((PyObject*)function, "function_descriptor", self);
   parameters = PyDict_New();
   PyObject_SetAttrString((PyObject*)function, "parameters", parameters);
@@ -738,7 +741,7 @@ static void sapnwrfc_FuncCall_dealloc(sapnwrfc_FuncCallObject* self) {
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
-      SAPNW_rfc_conn_error(PyString_FromFormat("Problem in RfcDestroyFunction: %s", ptr->desc_handle->name),
+      SAPNW_rfc_conn_error(PyBytes_FromFormat("Problem in RfcDestroyFunction: %s", ptr->desc_handle->name),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -761,8 +764,8 @@ static PyObject * get_time_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetTime(hcont, name, timeBuff, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetTime: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetTime: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -781,8 +784,8 @@ static PyObject * get_date_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetDate(hcont, name, dateBuff, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetDate: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetDate: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -800,8 +803,8 @@ static PyObject * get_int_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetInt(hcont, name, &rfc_int, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetInt: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetInt: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -818,8 +821,8 @@ static PyObject * get_int1_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetInt1(hcont, name, &rfc_int1, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetInt1: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetInt1: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -836,8 +839,8 @@ static PyObject * get_int2_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetInt2(hcont, name, &rfc_int2, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetInt2: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetInt2: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -854,8 +857,8 @@ static PyObject * get_float_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetFloat(hcont, name, &rfc_float, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetFloat: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetFloat: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -874,8 +877,8 @@ static PyObject * get_string_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetStringLength(hcont, name, &strLen, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetStringLength: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetStringLength: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -888,8 +891,8 @@ static PyObject * get_string_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
   buffer = make_space(strLen*4);
   rc = RfcGetString(hcont, name, (SAP_UC *)buffer, strLen + 2, &retStrLen, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetString: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetString: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -912,8 +915,8 @@ static PyObject * get_xstring_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetStringLength(hcont, name, &strLen, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetStringLength in XSTRING: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetStringLength in XSTRING: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -926,14 +929,14 @@ static PyObject * get_xstring_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
   buffer = make_space(strLen);
   rc = RfcGetXString(hcont, name, (SAP_RAW *)buffer, strLen, &retStrLen, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetXString: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetXString: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
   }
 
-  val = PyString_FromStringAndSize(buffer, strLen);
+  val = PyBytes_FromStringAndSize(buffer, strLen);
   free(buffer);
   return val;
 }
@@ -950,8 +953,8 @@ static PyObject * get_num_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, unsig
   buffer = make_space(ulen*2); /* seems that you need 2 null bytes to terminate a string ...*/
   rc = RfcGetNum(hcont, name, (RFC_NUM *)buffer, ulen, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetNum: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetNum: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -977,8 +980,8 @@ static PyObject * get_bcd_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
   buffer = make_space(strLen*2);
   rc = RfcGetString(hcont, name, (SAP_UC *)buffer, strLen, &retStrLen, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetString in NUMC: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetString in NUMC: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1004,8 +1007,8 @@ static PyObject * get_char_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, unsi
 
     rc = RfcGetChars(hcont, name, (RFC_CHAR *)buffer, ulen, &errorInfo);
     if (rc != RFC_OK) {
-         return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetChars: %s",
-                                        PyString_AsString(u16to8(name))),
+         return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetChars: %s",
+                                        PyBytes_AsString(u16to8(name))),
                                             errorInfo.code,
                          u16to8(errorInfo.key),
                                 u16to8(errorInfo.message));
@@ -1019,7 +1022,7 @@ static PyObject * get_char_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, unsi
     memset(utf8, 0, utf8Size + 4);
   resultLength = 0;
     rc = RfcSAPUCToUTF8((SAP_UC *)buffer, ulen, (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
-    val = PyString_FromStringAndSize(utf8, resultLength);
+    val = PyBytes_FromStringAndSize(utf8, resultLength);
   free(utf8);
     free(buffer);
 
@@ -1037,13 +1040,13 @@ static PyObject * get_byte_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, unsi
   buffer = make_space(len);
   rc = RfcGetBytes(hcont, name, (SAP_RAW *)buffer, len, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetBytes: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetBytes: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
   }
-  val = PyString_FromStringAndSize(buffer, len);
+  val = PyBytes_FromStringAndSize(buffer, len);
   free(buffer);
 
   return val;
@@ -1062,8 +1065,8 @@ static PyObject * get_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name)
 
   rc = RfcGetStructure(hcont, name, &line, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetStructure: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetStructure: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1071,8 +1074,8 @@ static PyObject * get_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name)
 
   typeHandle = RfcDescribeType(line, &errorInfo);
   if (typeHandle == NULL) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcDescribeType: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcDescribeType: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1080,8 +1083,8 @@ static PyObject * get_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name)
 
   rc = RfcGetFieldCount(typeHandle, &fieldCount, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetFieldCount: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetFieldCount: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1091,8 +1094,8 @@ static PyObject * get_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name)
   for (i = 0; i < fieldCount; i++) {
     rc = RfcGetFieldDescByIndex(typeHandle, i, &fieldDesc, &errorInfo);
     if (rc != RFC_OK) {
-       return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetFieldDescByIndex: %s",
-                                       PyString_AsString(u16to8(name))),
+       return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetFieldDescByIndex: %s",
+                                       PyBytes_AsString(u16to8(name))),
                            errorInfo.code,
                             u16to8(errorInfo.key),
                            u16to8(errorInfo.message));
@@ -1151,8 +1154,8 @@ static PyObject * get_field_value(DATA_CONTAINER_HANDLE hcont, RFC_FIELD_DESC fi
     case RFCTYPE_TABLE:
       rc = RfcGetTable(hcont, fieldDesc.name, &tableHandle, &errorInfo);
       if (rc != RFC_OK) {
-         return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetTable: %s",
-                                       PyString_AsString(u16to8(fieldDesc.name))),
+         return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetTable: %s",
+                                       PyBytes_AsString(u16to8(fieldDesc.name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1190,7 +1193,7 @@ static PyObject * get_table_line(RFC_STRUCTURE_HANDLE line){
 
   typeHandle = RfcDescribeType(line, &errorInfo);
   if (typeHandle == NULL) {
-     return SAPNW_rfc_call_error(PyString_FromString("Problem with RfcDescribeType"),
+     return SAPNW_rfc_call_error(PyBytes_FromString("Problem with RfcDescribeType"),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1198,7 +1201,7 @@ static PyObject * get_table_line(RFC_STRUCTURE_HANDLE line){
 
   rc = RfcGetFieldCount(typeHandle, &fieldCount, &errorInfo);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromString("Problem with RfcGetFieldCount"),
+     return SAPNW_rfc_call_error(PyBytes_FromString("Problem with RfcGetFieldCount"),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1208,7 +1211,7 @@ static PyObject * get_table_line(RFC_STRUCTURE_HANDLE line){
   for (i = 0; i < fieldCount; i++) {
     rc = RfcGetFieldDescByIndex(typeHandle, i, &fieldDesc, &errorInfo);
     if (rc != RFC_OK) {
-       return SAPNW_rfc_call_error(PyString_FromString("Problem with RfcGetFieldDescByIndex: "),
+       return SAPNW_rfc_call_error(PyBytes_FromString("Problem with RfcGetFieldDescByIndex: "),
                            errorInfo.code,
                             u16to8(errorInfo.key),
                            u16to8(errorInfo.message));
@@ -1232,8 +1235,8 @@ static PyObject * get_table_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
 
   rc = RfcGetRowCount(hcont, &tabLen, NULL);
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetRowCount: %s",
-                                       PyString_AsString(u16to8(name))),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetRowCount: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1269,8 +1272,8 @@ static PyObject * get_parameter_value(PyObject * name, SAPNW_FUNC *fptr){
   /* bail on a bad call for parameter description */
   if (rc != RFC_OK) {
     free(p_name);
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetParameterDescByName: %s",
-                                       PyString_AsString(name)),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetParameterDescByName: %s",
+                                       PyBytes_AsString(name)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1314,8 +1317,8 @@ static PyObject * get_parameter_value(PyObject * name, SAPNW_FUNC *fptr){
     case RFCTYPE_TABLE:
       rc = RfcGetTable(fptr->handle, p_name, &tableHandle, &errorInfo);
       if (rc != RFC_OK) {
-         return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetTable: %s",
-                                       PyString_AsString(u16to8(p_name))),
+         return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetTable: %s",
+                                       PyBytes_AsString(u16to8(p_name))),
                          errorInfo.code,
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
@@ -1351,12 +1354,12 @@ void set_date_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value)
   SAP_UC *p_value;
   RFC_DATE date_value;
 
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetDate invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("RfcSetDate invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
-  if (PyString_Size(value) != 8) {
-     SAPNW_rfc_call_error1("RfcSetDate invalid date format:", PyString_AsString(value));
+  if (PyBytes_Size(value) != 8) {
+     SAPNW_rfc_call_error1("RfcSetDate invalid date format:", PyBytes_AsString(value));
     return;
   }
   p_value = u8to16(value);
@@ -1365,8 +1368,8 @@ void set_date_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value)
 
   rc = RfcSetDate(hcont, name, date_value, &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetDate: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetDate: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1384,12 +1387,12 @@ void set_time_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value)
   SAP_UC *p_value;
   RFC_TIME time_value;
 
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetTime invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("RfcSetTime invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
-  if (PyString_Size(value) != 6) {
-     SAPNW_rfc_call_error1("RfcSetTime invalid date format:", PyString_AsString(value));
+  if (PyBytes_Size(value) != 6) {
+     SAPNW_rfc_call_error1("RfcSetTime invalid date format:", PyBytes_AsString(value));
     return;
   }
   p_value = u8to16(value);
@@ -1398,8 +1401,8 @@ void set_time_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value)
 
   rc = RfcSetTime(hcont, name, time_value, &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetTime: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetTime: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1416,12 +1419,12 @@ void set_num_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value, 
     RFC_ERROR_INFO errorInfo;
     SAP_UC *p_value;
 
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetNum invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("RfcSetNum invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
-  if ((int)PyString_Size(value) > (int)max) {
-     SAPNW_rfc_call_error1("RfcSetNum string too long:", PyString_AsString(value));
+  if ((int)PyBytes_Size(value) > (int)max) {
+     SAPNW_rfc_call_error1("RfcSetNum string too long:", PyBytes_AsString(value));
     return;
   }
 
@@ -1429,8 +1432,8 @@ void set_num_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value, 
   rc = RfcSetNum(hcont, name, (RFC_NUM *)p_value, strlenU(p_value), &errorInfo);
   free(p_value);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetNum: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetNum: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1448,8 +1451,8 @@ void set_bcd_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value){
   SAP_UC *p_value;
 
   /* make sure that the BCD source value is a string */
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("(bcd)RfcSetString invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("(bcd)RfcSetString invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
 
@@ -1457,8 +1460,8 @@ void set_bcd_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value){
   rc = RfcSetString(hcont, name, p_value, strlenU(p_value), &errorInfo);
   free(p_value);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetBCD: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetBCD: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1475,8 +1478,8 @@ void set_char_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value,
   RFC_ERROR_INFO errorInfo;
   SAP_UC *p_value;
 
-  if (! PyString_Check(value) && !PyUnicode_Check(value)){
-         SAPNW_rfc_call_error1("RfcSetChar invalid Input value type:", PyString_AsString(PyObject_Repr(value)));
+  if (! PyBytes_Check(value) && !PyUnicode_Check(value)){
+         SAPNW_rfc_call_error1("RfcSetChar invalid Input value type:", PyBytes_AsString(PyObject_Repr(value)));
     return;
   }
 
@@ -1484,8 +1487,8 @@ void set_char_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value,
     rc = RfcSetChars(hcont, name, p_value, strlenU(p_value), &errorInfo);
     free(p_value);
     if (rc != RFC_OK) {
-         SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetChars: %s",
-                                         PyString_AsString(u16to8(name))),
+         SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetChars: %s",
+                                         PyBytes_AsString(u16to8(name))),
                                              errorInfo.code,
                          u16to8(errorInfo.key),
                                   u16to8(errorInfo.message));
@@ -1501,18 +1504,18 @@ void set_byte_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value,
   RFC_RC rc = RFC_OK;
   RFC_ERROR_INFO errorInfo;
 
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetByte invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("RfcSetByte invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
-  if ((int)PyString_Size(value) > (int)max) {
-     SAPNW_rfc_call_error1("RfcSetByte string too long:", PyString_AsString(value));
+  if ((int)PyBytes_Size(value) > (int)max) {
+     SAPNW_rfc_call_error1("RfcSetByte string too long:", PyBytes_AsString(value));
     return;
   }
-  rc = RfcSetBytes(hcont, name, (SAP_RAW *)PyString_AsString(value), PyString_Size(value), &errorInfo);
+  rc = RfcSetBytes(hcont, name, (SAP_RAW *)PyBytes_AsString(value), PyBytes_Size(value), &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetBytes: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetBytes: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1529,13 +1532,13 @@ void set_float_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value
   RFC_ERROR_INFO errorInfo;
 
   if (! PyFloat_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetFloat invalid Input value type:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetFloat invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
   rc = RfcSetFloat(hcont, name, (RFC_FLOAT) PyFloat_AsDouble(value), &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetFloat: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetFloat: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1552,13 +1555,13 @@ void set_int_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value){
   RFC_ERROR_INFO errorInfo;
 
   if (! PyInt_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetInt invalid Input value type:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetInt invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
   rc = RfcSetInt(hcont, name, (RFC_INT) PyInt_AsLong(value), &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetInt: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetInt: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1575,17 +1578,17 @@ void set_int1_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value)
   RFC_ERROR_INFO errorInfo;
 
   if (! PyInt_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetInt1 invalid Input value type:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetInt1 invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
   if (PyInt_AsLong(value) > 255){
-     SAPNW_rfc_call_error1("RfcSetInt1 invalid Input value too big on:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetInt1 invalid Input value too big on:", PyBytes_AsString(u16to8(name)));
     return;
   }
   rc = RfcSetInt1(hcont, name, (RFC_INT1) PyInt_AsLong(value), &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetInt1: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetInt1: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1602,17 +1605,17 @@ void set_int2_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value)
   RFC_ERROR_INFO errorInfo;
 
   if (! PyInt_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetInt2 invalid Input value type:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetInt2 invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
   if (PyInt_AsLong(value) > 4095){
-     SAPNW_rfc_call_error1("RfcSetInt2 invalid Input value too big on:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetInt2 invalid Input value too big on:", PyBytes_AsString(u16to8(name)));
     return;
   }
   rc = RfcSetInt2(hcont, name, (RFC_INT2) PyInt_AsLong(value), &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetInt2: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetInt2: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1629,8 +1632,8 @@ void set_string_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * valu
   RFC_ERROR_INFO errorInfo;
   SAP_UC *p_value;
 
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetString invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("RfcSetString invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
 
@@ -1638,8 +1641,8 @@ void set_string_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * valu
   rc = RfcSetString(hcont, name, p_value, strlenU(p_value), &errorInfo);
   free(p_value);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetString: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetString: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1655,15 +1658,15 @@ void set_xstring_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * val
   RFC_RC rc = RFC_OK;
   RFC_ERROR_INFO errorInfo;
 
-  if (! PyString_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetXString invalid Input value type:", PyString_AsString(u16to8(name)));
+  if (! PyBytes_Check(value)){
+     SAPNW_rfc_call_error1("RfcSetXString invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
 
-  rc = RfcSetXString(hcont, name, (SAP_RAW *)PyString_AsString(value), PyString_Size(value), &errorInfo);
+  rc = RfcSetXString(hcont, name, (SAP_RAW *)PyBytes_AsString(value), PyBytes_Size(value), &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetXString: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetXString: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1687,14 +1690,14 @@ void set_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * v
   PyObject * key, * val;
 
   if (! PyDict_Check(value)){
-     SAPNW_rfc_call_error1("RfcSetStructure invalid Input value type:", PyString_AsString(u16to8(name)));
+     SAPNW_rfc_call_error1("RfcSetStructure invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
 
   rc = RfcGetStructure(hcont, name, &line, &errorInfo);
   if (rc != RFC_OK) {
-     SAPNW_rfc_call_error(PyString_FromFormat("(set)Problem with RfcGetStructure: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("(set)Problem with RfcGetStructure: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1703,8 +1706,8 @@ void set_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * v
 
   typeHandle = RfcDescribeType(line, &errorInfo);
   if (typeHandle == NULL) {
-     SAPNW_rfc_call_error(PyString_FromFormat("(set)Problem with RfcDescribeType: %s",
-                                       PyString_AsString(u16to8(name))),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("(set)Problem with RfcDescribeType: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1716,8 +1719,8 @@ void set_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * v
   while (PyDict_Next(value, &pos, &key, &val)) {
     rc = RfcGetFieldDescByName(typeHandle, (p_name = u8to16(key)), &fieldDesc, &errorInfo);
     if (rc != RFC_OK) {
-       SAPNW_rfc_call_error(PyString_FromFormat("(set)Problem with RfcGetFieldDescByName: %s",
-                                       PyString_AsString(u16to8(name))),
+       SAPNW_rfc_call_error(PyBytes_FromFormat("(set)Problem with RfcGetFieldDescByName: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1778,8 +1781,8 @@ void set_field_value(DATA_CONTAINER_HANDLE hcont, RFC_FIELD_DESC fieldDesc, PyOb
     case RFCTYPE_TABLE:
       rc = RfcGetTable(hcont, fieldDesc.name, &tableHandle, &errorInfo);
       if (rc != RFC_OK) {
-           SAPNW_rfc_call_error(PyString_FromFormat("(set_table)Problem with RfcGetTable: %s",
-                                       PyString_AsString(u16to8(fieldDesc.name))),
+           SAPNW_rfc_call_error(PyBytes_FromFormat("(set_table)Problem with RfcGetTable: %s",
+                                       PyBytes_AsString(u16to8(fieldDesc.name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1826,7 +1829,7 @@ void set_table_line(RFC_STRUCTURE_HANDLE line, PyObject * value){
 
   typeHandle = RfcDescribeType(line, &errorInfo);
   if (typeHandle == NULL) {
-     SAPNW_rfc_call_error(PyString_FromString("(set_table_line)Problem with RfcDescribeType"),
+     SAPNW_rfc_call_error(PyBytes_FromString("(set_table_line)Problem with RfcDescribeType"),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1839,8 +1842,8 @@ void set_table_line(RFC_STRUCTURE_HANDLE line, PyObject * value){
   while (PyDict_Next(value, &pos, &key, &val)) {
     rc = RfcGetFieldDescByName(typeHandle, (p_name = u8to16(key)), &fieldDesc, &errorInfo);
     if (rc != RFC_OK) {
-       SAPNW_rfc_call_error(PyString_FromFormat("(set_table_line)Problem with RfcGetFieldDescByName: %s",
-                                       PyString_AsString(key)),
+       SAPNW_rfc_call_error(PyBytes_FromFormat("(set_table_line)Problem with RfcGetFieldDescByName: %s",
+                                       PyBytes_AsString(key)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1867,15 +1870,15 @@ void set_table_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, PyObject * value
   PyObject * row;
 
   if (! PyList_Check(value)){
-    SAPNW_rfc_call_error1("set_table invalid Input value type:", PyString_AsString(u16to8(name)));
+    SAPNW_rfc_call_error1("set_table invalid Input value type:", PyBytes_AsString(u16to8(name)));
     return;
   }
   for (r = 0; (int)r < (int)PyList_Size(value); r++) {
     row = PyList_GetItem(value, r);
     line = RfcAppendNewRow(hcont, &errorInfo);
     if (line == NULL) {
-       SAPNW_rfc_call_error(PyString_FromFormat("(set_table)Problem with RfcAppendNewRow: %s",
-                                       PyString_AsString(u16to8(name))),
+       SAPNW_rfc_call_error(PyBytes_FromFormat("(set_table)Problem with RfcAppendNewRow: %s",
+                                       PyBytes_AsString(u16to8(name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1913,8 +1916,8 @@ void set_parameter_value(SAPNW_FUNC *fptr, PyObject * name, PyObject * value){
   /* bail on a bad call for parameter description */
   if (rc != RFC_OK) {
     free(p_name);
-     SAPNW_rfc_call_error(PyString_FromFormat("(set)Problem with RfcGetParameterDescByName: %s",
-                                       PyString_AsString(name)),
+     SAPNW_rfc_call_error(PyBytes_FromFormat("(set)Problem with RfcGetParameterDescByName: %s",
+                                       PyBytes_AsString(name)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -1958,8 +1961,8 @@ void set_parameter_value(SAPNW_FUNC *fptr, PyObject * name, PyObject * value){
     case RFCTYPE_TABLE:
       rc = RfcGetTable(fptr->handle, p_name, &tableHandle, &errorInfo);
       if (rc != RFC_OK) {
-           SAPNW_rfc_call_error(PyString_FromFormat("(set_table)Problem with RfcGetTable: %s",
-                                       PyString_AsString(u16to8(p_name))),
+           SAPNW_rfc_call_error(PyBytes_FromFormat("(set_table)Problem with RfcGetTable: %s",
+                                       PyBytes_AsString(u16to8(p_name))),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -2005,8 +2008,8 @@ static PyObject * sapnwrfc_set_active(sapnwrfc_FuncCallObject* self, PyObject * 
   rc = RfcSetParameterActive(fptr->handle, (p_name = u8to16(name)), PyLong_AsLong(active), &errorInfo);
   free(p_name);
   if (rc != RFC_OK)
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcSetParameterActive: %s",
-                                       PyString_AsString(name)),
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcSetParameterActive: %s",
+                                       PyBytes_AsString(name)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -2062,11 +2065,11 @@ static PyObject * sapnwrfc_invoke(sapnwrfc_FuncCallObject* self){
          if (value == Py_None)
            continue;
          if (! PyList_Check(value))
-           return SAPNW_rfc_call_error1("RFC_TABLES requires LIST:", PyString_AsString(name));
+           return SAPNW_rfc_call_error1("RFC_TABLES requires LIST:", PyBytes_AsString(name));
          rc = RfcGetTable(fptr->handle, (p_name = u8to16(name)), &tableHandle, &errorInfo);
          if (rc != RFC_OK) {
-            return SAPNW_rfc_call_error(PyString_FromFormat("(set)Problem with RfcGetTable: %s",
-                                       PyString_AsString(name)),
+            return SAPNW_rfc_call_error(PyBytes_FromFormat("(set)Problem with RfcGetTable: %s",
+                                       PyBytes_AsString(name)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -2075,8 +2078,8 @@ static PyObject * sapnwrfc_invoke(sapnwrfc_FuncCallObject* self){
             row = PyList_GetItem(value, r);
            line = RfcAppendNewRow(tableHandle, &errorInfo);
            if (line == NULL) {
-              return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcAppendNewRow: %s",
-                                       PyString_AsString(name)),
+              return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcAppendNewRow: %s",
+                                       PyBytes_AsString(name)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
@@ -2104,7 +2107,7 @@ static PyObject * sapnwrfc_invoke(sapnwrfc_FuncCallObject* self){
 
   /* bail on a bad RFC Call */
   if (rc != RFC_OK) {
-     return SAPNW_rfc_call_error(PyString_FromFormat("Problem Invoking RFC: %s",
+     return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem Invoking RFC: %s",
                                      dptr->name),
                          errorInfo.code,
                          u16to8(errorInfo.key),
@@ -2124,16 +2127,16 @@ static PyObject * sapnwrfc_invoke(sapnwrfc_FuncCallObject* self){
         case RFC_TABLES:
          rc = RfcGetTable(fptr->handle, (p_name = u8to16(name)), &tableHandle, &errorInfo);
          if (rc != RFC_OK) {
-            return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetTable: %s",
-                                       PyString_AsString(name)),
+            return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetTable: %s",
+                                       PyBytes_AsString(name)),
                          errorInfo.code,
                          u16to8(errorInfo.key),
                           u16to8(errorInfo.message));
           }
          rc = RfcGetRowCount(tableHandle, &tabLen, NULL);
          if (rc != RFC_OK) {
-            return SAPNW_rfc_call_error(PyString_FromFormat("Problem with RfcGetRowCount: %s",
-                                       PyString_AsString(name)),
+            return SAPNW_rfc_call_error(PyBytes_FromFormat("Problem with RfcGetRowCount: %s",
+                                       PyBytes_AsString(name)),
                                errorInfo.code,
                                 u16to8(errorInfo.key),
                                 u16to8(errorInfo.message));
@@ -2428,7 +2431,7 @@ initnwsaprfcutil(void)
 #if PY_MAJOR_VERSION >= 3
     s = PyImport_Import(PyUnicode_FromString("sapnwrfc"));
 #else
-    s = PyImport_Import(PyString_FromString("sapnwrfc"));
+    s = PyImport_Import(PyBytes_FromString("sapnwrfc"));
 #endif
     Py_INCREF(E_RFC_COMMS);
     PyModule_AddObject(s, "RFCCommunicationError", E_RFC_COMMS);
