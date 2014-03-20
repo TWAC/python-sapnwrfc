@@ -124,6 +124,8 @@ SAP_UC * u8to16c(char * str);
 SAP_UC * u8to16(PyObject *str);
 PyObject* u16to8c(SAP_UC * str, int len);
 PyObject* u16to8(SAP_UC * str);
+PyObject* u16toPyUc(SAP_UC * str, int len);
+PyObject* u16toPyU(SAP_UC * str);
 static PyObject* SAPNW_rfc_conn_error(PyObject* msg, int code, PyObject* key, PyObject* message);
 // static PyObject* SAPNW_rfc_serv_error(PyObject* msg, int code, PyObject* key, PyObject* message);
 static PyObject* SAPNW_rfc_call_error(PyObject* msg, int code, PyObject* key, PyObject* message);
@@ -246,6 +248,57 @@ PyObject* u16to8(SAP_UC * str) {
 }
 
 
+/* Works as u16to8c on Py2, returns unicode on Py3 */
+PyObject* u16toPyUc(SAP_UC * str, int len) {
+  //RFC_RC rc;
+  RFC_ERROR_INFO errorInfo;
+  unsigned utf8Size, resultLength;
+  char * utf8;
+  PyObject * py_str;
+
+  utf8Size = len * 4;
+  utf8 = malloc(utf8Size + 2);
+  memset(utf8, 0, utf8Size + 2);
+
+  resultLength = 0;
+
+  //rc = RfcSAPUCToUTF8(str, len, (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
+  RfcSAPUCToUTF8(str, len, (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
+#if PY_MAJOR_VERSION >= 3
+  py_str = PyUnicode_FromStringAndSize(utf8, resultLength);
+#else
+  py_str = PyBytes_FromStringAndSize(utf8, resultLength);
+#endif
+  free(utf8);
+  return py_str;
+}
+
+
+/* Works as u16to8 on Py2, returns unicode on Py3 */
+PyObject* u16toPyU(SAP_UC * str) {
+  //RFC_RC rc;
+  RFC_ERROR_INFO errorInfo;
+  unsigned utf8Size, resultLength;
+  char * utf8;
+  PyObject * py_str;
+
+  utf8Size = strlenU(str) * 4;
+  utf8 = malloc(utf8Size + 2);
+  memset(utf8, 0, utf8Size + 2);
+
+  resultLength = 0;
+
+  //rc = RfcSAPUCToUTF8(str, strlenU(str), (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
+  RfcSAPUCToUTF8(str, strlenU(str), (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
+#if PY_MAJOR_VERSION >= 3
+  py_str = PyUnicode_FromStringAndSize(utf8, resultLength);
+#else
+  py_str = PyBytes_FromStringAndSize(utf8, resultLength);
+#endif
+  free(utf8);
+  return py_str;
+}
+
 static PyObject* SAPNW_rfc_conn_error(PyObject* msg, int code, PyObject* key, PyObject* message) {
 
   PyErr_Format(E_RFC_COMMS, "RFC COMMUNICATION ERROR: %s / %d / %s / %s", PyBytes_AsString(msg), code, PyBytes_AsString(key), PyBytes_AsString(message));
@@ -331,26 +384,26 @@ static PyObject* sapnwrfc_connection_attributes(sapnwrfc_ConnObject *self, PyObj
 
   /* else return a hash of connection attributes */
   attrib_hash = PyDict_New();
-  PyDict_SetItemString(attrib_hash, "dest", u16to8(attribs.dest));
-  PyDict_SetItemString(attrib_hash, "host", u16to8(attribs.host));
-  PyDict_SetItemString(attrib_hash, "partnerHost", u16to8(attribs.partnerHost));
-  PyDict_SetItemString(attrib_hash, "sysNumber", u16to8(attribs.sysNumber));
-  PyDict_SetItemString(attrib_hash, "sysId", u16to8(attribs.sysId));
-  PyDict_SetItemString(attrib_hash, "client", u16to8(attribs.client));
-  PyDict_SetItemString(attrib_hash, "user", u16to8(attribs.user));
-  PyDict_SetItemString(attrib_hash, "language", u16to8(attribs.language));
-  PyDict_SetItemString(attrib_hash, "trace", u16to8(attribs.trace));
-  PyDict_SetItemString(attrib_hash, "isoLanguage", u16to8(attribs.isoLanguage));
-  PyDict_SetItemString(attrib_hash, "codepage", u16to8(attribs.codepage));
-  PyDict_SetItemString(attrib_hash, "partnerCodepage", u16to8(attribs.partnerCodepage));
-  PyDict_SetItemString(attrib_hash, "rfcRole", u16to8(attribs.rfcRole));
-  PyDict_SetItemString(attrib_hash, "type", u16to8(attribs.type));
-  PyDict_SetItemString(attrib_hash, "rel", u16to8(attribs.rel));
-  PyDict_SetItemString(attrib_hash, "partnerType", u16to8(attribs.partnerType));
-  PyDict_SetItemString(attrib_hash, "partnerRel", u16to8(attribs.partnerRel));
-  PyDict_SetItemString(attrib_hash, "kernelRel", u16to8(attribs.kernelRel));
-  PyDict_SetItemString(attrib_hash, "cpicConvId", u16to8(attribs.cpicConvId));
-  PyDict_SetItemString(attrib_hash, "progName", u16to8(attribs.progName));
+  PyDict_SetItemString(attrib_hash, "dest", u16toPyU(attribs.dest));
+  PyDict_SetItemString(attrib_hash, "host", u16toPyU(attribs.host));
+  PyDict_SetItemString(attrib_hash, "partnerHost", u16toPyU(attribs.partnerHost));
+  PyDict_SetItemString(attrib_hash, "sysNumber", u16toPyU(attribs.sysNumber));
+  PyDict_SetItemString(attrib_hash, "sysId", u16toPyU(attribs.sysId));
+  PyDict_SetItemString(attrib_hash, "client", u16toPyU(attribs.client));
+  PyDict_SetItemString(attrib_hash, "user", u16toPyU(attribs.user));
+  PyDict_SetItemString(attrib_hash, "language", u16toPyU(attribs.language));
+  PyDict_SetItemString(attrib_hash, "trace", u16toPyU(attribs.trace));
+  PyDict_SetItemString(attrib_hash, "isoLanguage", u16toPyU(attribs.isoLanguage));
+  PyDict_SetItemString(attrib_hash, "codepage", u16toPyU(attribs.codepage));
+  PyDict_SetItemString(attrib_hash, "partnerCodepage", u16toPyU(attribs.partnerCodepage));
+  PyDict_SetItemString(attrib_hash, "rfcRole", u16toPyU(attribs.rfcRole));
+  PyDict_SetItemString(attrib_hash, "type", u16toPyU(attribs.type));
+  PyDict_SetItemString(attrib_hash, "rel", u16toPyU(attribs.rel));
+  PyDict_SetItemString(attrib_hash, "partnerType", u16toPyU(attribs.partnerType));
+  PyDict_SetItemString(attrib_hash, "partnerRel", u16toPyU(attribs.partnerRel));
+  PyDict_SetItemString(attrib_hash, "kernelRel", u16toPyU(attribs.kernelRel));
+  PyDict_SetItemString(attrib_hash, "cpicConvId", u16toPyU(attribs.cpicConvId));
+  PyDict_SetItemString(attrib_hash, "progName", u16toPyU(attribs.progName));
 
   return attrib_hash;
 }
@@ -620,7 +673,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
                          u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
   }
-  PyObject_SetAttrString((PyObject*)function_def, "name", u16to8(func_name));
+  PyObject_SetAttrString((PyObject*)function_def, "name", u16toPyU(func_name));
 
   /* Get the parameter details */
   rc = RfcGetParameterCount(dptr->handle, &parm_count, &errorInfo);
@@ -646,7 +699,7 @@ static PyObject * sapnwrfc_function_lookup(sapnwrfc_ConnObject *self, PyObject *
     }
 
     /* create a new parameter obj */
-    parm_name = u16to8(parm_desc.name);
+    parm_name = u16toPyU(parm_desc.name);
     parameter = PyDict_New();
     PyDict_SetItemString(parameter, "name", parm_name);
     PyDict_SetItemString(parameter, "direction", PyInt_FromLong(parm_desc.direction));
@@ -688,7 +741,11 @@ static PyObject * sapnwrfc_create_function_call(PyObject *self, PyObject *args){
   function = (sapnwrfc_FuncCallObject *) PyObject_CallFunction((PyObject *)&sapnwrfc_FuncCallType, "O", self);
   //Py_INCREF(function);
   function->handle->handle = func_handle;
+#if PY_MAJOR_VERSION >= 3
+  PyObject_SetAttrString((PyObject*)function, "name", PyUnicode_FromString(dptr->name));
+#else
   PyObject_SetAttrString((PyObject*)function, "name", PyBytes_FromString(dptr->name));
+#endif
   PyObject_SetAttrString((PyObject*)function, "function_descriptor", self);
   parameters = PyDict_New();
   PyObject_SetAttrString((PyObject*)function, "parameters", parameters);
@@ -775,7 +832,7 @@ static PyObject * get_time_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
   }
-  val = u16to8c(timeBuff, 6);
+  val = u16toPyUc(timeBuff, 6);
   return val;
 }
 
@@ -795,7 +852,7 @@ static PyObject * get_date_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
   }
-  val = u16to8c(dateBuff, 8);
+  val = u16toPyUc(dateBuff, 8);
   return val;
 }
 
@@ -904,7 +961,7 @@ static PyObject * get_string_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name){
   }
 
   //val = u16to8c((SAP_UC *)buffer, retStrLen*2);
-  val = u16to8c((SAP_UC *)buffer, retStrLen);
+  val = u16toPyUc((SAP_UC *)buffer, retStrLen);
   free(buffer);
   return val;
 }
@@ -964,7 +1021,7 @@ static PyObject * get_num_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, unsig
                           u16to8(errorInfo.key),
                          u16to8(errorInfo.message));
   }
-  val = u16to8((SAP_UC *)buffer);
+  val = u16toPyU((SAP_UC *)buffer);
   free(buffer);
 
   return val;
@@ -1027,7 +1084,11 @@ static PyObject * get_char_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name, unsi
     memset(utf8, 0, utf8Size + 4);
   resultLength = 0;
     rc = RfcSAPUCToUTF8((SAP_UC *)buffer, ulen, (RFC_BYTE *)utf8, &utf8Size, &resultLength, &errorInfo);
+#if PY_MAJOR_VERSION >= 3
+    val = PyUnicode_FromStringAndSize(utf8, resultLength);
+#else
     val = PyBytes_FromStringAndSize(utf8, resultLength);
+#endif
   free(utf8);
     free(buffer);
 
@@ -1107,7 +1168,7 @@ static PyObject * get_structure_value(DATA_CONTAINER_HANDLE hcont, SAP_UC *name)
     }
 
     /* process each field type ...*/
-    PyDict_SetItem(val, u16to8(fieldDesc.name), get_field_value(line, fieldDesc));
+    PyDict_SetItem(val, u16toPyU(fieldDesc.name), get_field_value(line, fieldDesc));
   }
 
   return val;
@@ -1223,7 +1284,7 @@ static PyObject * get_table_line(RFC_STRUCTURE_HANDLE line){
     }
 
     /* process each field type ...*/
-    PyDict_SetItem(val, u16to8(fieldDesc.name), get_field_value(line, fieldDesc));
+    PyDict_SetItem(val, u16toPyU(fieldDesc.name), get_field_value(line, fieldDesc));
   }
 
   return val;
